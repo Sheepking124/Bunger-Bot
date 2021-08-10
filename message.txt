@@ -1,11 +1,36 @@
+from math import trunc
+import re
 import discord
 import random
+from discord import message
 from discord.ext import commands
 import json
 import os
 
+#from requests.api import delete
 
-# os.chdir("C:\\Users\\Luke\\Desktop\\Python VScode")
+delmessages = []
+confmessages = []
+
+#Name, Sellprice, catchchance
+catchablefish = [
+ ["Trout", 25, 40],
+ ["Cod", 30, 30],
+ ["Bass", 35, 20],
+ ["Crab", 75, 10]
+ ]
+
+#Name, Description, sellable, Sellprice, UseAble
+fishitems = [
+ ["Trout", ":fish: A basic trout", True, 40, False],
+ ["Cod", ":fish: A Basic Cod", True, 30, False],
+ ["Bass", ":fish: Some sort of bass", True, 35, False],
+ ["Crab", ":crab: How did you catch a crab", True, 75, False]
+]
+
+print(catchablefish[1][1])
+
+#os.chdir("C:\\Users\\Luke\\Desktop\\Python VScode")
 #os.chdir("C:\\Users\\divya\\Documents\\Desktop\\Python\\discord bot")
 os.chdir("C:\\Users\\Luke\\Desktop\\Python VScode")
 
@@ -150,11 +175,19 @@ async def work(ctx):
      winembed.add_field(name="Total Bungers", value=f":hamburger:{new_wallet} in wallet\n:hamburger:{new_bank} In bank", inline=False)
      
      await ctx.send(embed=winembed)
+
 #deposit comand
 @Bot.command(aliases=['deposit', 'depo'])
 async def dep(ctx, num):
+    
     await makeacc(ctx)
     users = await getusers()
+
+    if num == "all":
+        num = inwallet = users[str(ctx.author.id)]["wallet"]
+    if num == "half":
+        num = inwallet = users[str(ctx.author.id)]["wallet"] / 2 
+    num = round(num)
 
     inwallet = users[str(ctx.author.id)]["wallet"]
     inbank = users[str(ctx.author.id)]["bank"]
@@ -183,6 +216,12 @@ async def dep(ctx, num):
 async def withdraw(ctx, num):
     await makeacc(ctx)
     users = await getusers()
+
+    if num == "all":
+        num = inbank = users[str(ctx.author.id)]["bank"]
+    if num == "half":
+        num = inbank = users[str(ctx.author.id)]["bank"] / 2 
+    num = round(num)
 
     inwallet = users[str(ctx.author.id)]["wallet"]
     inbank = users[str(ctx.author.id)]["bank"]
@@ -227,25 +266,134 @@ async def bal(ctx):
 @Bot.command()
 async def fish(ctx):
     await makeinv(ctx)
-    fishes = ["Trout", "Cod", "Bass", "NightFish"]
+
+    inven = await getinven()
+    inv = inven[str(ctx.author.id)]["Inv"]
+    randnum = random.randint(0,3)
+    inv.append(fishitems[randnum])
+    await ctx.send(f"{ctx.author.mention}, You feel a bite... You Reel in... \nYou caught a **{fishitems[randnum][0]}**!")
+    with open("InvData.json", "w") as f:
+             json.dump(inven, f)
+
+
     
+    
+#checkinv command
+@Bot.command(aliases=["inventory"])
+async def inv(ctx):
+    
+    await makeinv(ctx)
+    emb = discord.Embed(title=f"{ctx.author.display_name}'s Inventory", color=discord.Color.blurple())
+    emb.set_author(name=ctx.author.display_name, icon_url = ctx.author.avatar_url)
+
+    inven = await getinven()
+    inv = inven[str(ctx.author.id)]["Inv"]
+    num = 0
+
+    for x in inven[str(ctx.author.id)]["Inv"]:
+        emb.add_field(name=x[0], value=f"{inv[num][1]}", inline=False)
+        num = num + 1
+
+    await ctx.send(embed=emb)
 
 async def makeinv(ctx):
-    with open("InvData.json", "r") as f:
-            users = json.load(f)
+    inven = await getinven()
 
-    if str(ctx.author.id) in users:
+    if str(ctx.author.id) in inven:
         pass
 
     else:
-          users[str(ctx.author.id)] = {}
-          users[str(ctx.author.id)]["Inv"] = [] 
+          inven[str(ctx.author.id)] = {}
+          inven[str(ctx.author.id)]["Inv"] = [] 
           with open("InvData.json", "w") as f:
-             json.dump(users, f)
+             json.dump(inven, f)
 
-    await ctx.send("Yep you have an inventory now")
+#sell command
+@Bot.command()
+async def sell(ctx, *, item):
+    await makeinv(ctx)
+    await makeacc(ctx)
+    inven = await getinven()
 
+    FoundItem = False
+    FoundNum = None
+    Num = 0
 
+    for x in inven[str(ctx.author.id)]["Inv"]:
+        if x[0] == item:
+            FoundItem = True
+            FoundNum = Num
+            break
+        Num = Num + 1
+
+    if FoundItem == False:
+        msg = await ctx.send("Item not found")
+        await msg.add_reaction("❌")
+        msgreaction = "❌"
+        sender = ctx.author
+        delmessages.append([msg, msgreaction, sender])
+
+    else: 
+        if inven[str(ctx.author.id)]["Inv"][FoundNum][2] != None:
+            
+
+            
+
+            users = await getusers()
+            name = inven[str(ctx.author.id)]["Inv"][FoundNum][0]
+            price = inven[str(ctx.author.id)]["Inv"][FoundNum][3]
+
+            
+
+            newbal = users[str(ctx.author.id)]["wallet"]
+            msg = await ctx.send(f'{ctx.author.mention}, Are you sure you want to sell "{name}" for :hamburger:{price} Bungers?')
+            #msg = await ctx.send(f"Succesfully sold {name} for :hamburger:{price} Bungers!\nNew Wallet Balance: :Hamburger:***{newbal}*** Bungers")
+            await msg.add_reaction("✔️")
+            await msg.add_reaction("❌")
+
+            decreact = "❌"
+            confreact = "✔️"
+            sender = ctx.author
+            confmessages.append([msg, confreact, decreact , sender, name, price, FoundNum])
+        else:
+            await ctx.send("Item not sellable")
+            
+@Bot.event
+async def on_reaction_add(reaction, user):
+    num = 0
+    for x in delmessages:
+        if x[0] == reaction.message and x[2] == user and str(reaction) == x[1]:
+            delmessages.remove(delmessages[num])
+            await reaction.message.delete()
+            break
+        num = num + 1
+
+    num = 0
+    for x in confmessages:
+        if x[0] == reaction.message and x[3] == user and str(reaction) == x[1]:
+            users = await getusers()
+            inven = await getinven()
+
+            users[str(user.id)]["wallet"] += inven[str(user.id)]["Inv"][x[6]][3]
+            with open("Data.json", "w") as f:
+                json.dump(users, f)
+            
+            Inv = inven[str(user.id)]["Inv"]
+            Inv.remove(inven[str(user.id)]["Inv"][x[6]])
+            with open("InvData.json", "w") as f:
+             json.dump(inven, f)
+            
+            users = await getusers()
+            bal = users[str(user.id)]["wallet"]
+            await reaction.message.edit(content=f'{user.mention}\nSuccesfully sold "{x[4]}" for :hamburger:{x[5]} Bungers!\nNew Wallet Balance: :hamburger:{bal} Bungers!')
+            confmessages.remove(confmessages[num])
+
+        elif x[0] == reaction.message and x[3] == user and str(reaction) == x[2]:
+            confmessages.remove(confmessages[num])
+            await reaction.message.edit(content="Sell Action Canceled")
+    num = num + 1
+        
+#Makes bank account
 async def makeacc(ctx):
     users = await getusers()
 
@@ -260,10 +408,18 @@ async def makeacc(ctx):
             json.dump(users, f)
         return True
 
+#Gets users
 async def getusers():
     with open("Data.json", "r") as f:
             users = json.load(f)
     return users
+
+#Gets Inven
+async  def getinven():
+    with open("InvData.json", "r") as f:
+        inven = json.load(f)
+    return inven
+
 
 
 # KEEP THIS SECRET (hes joking tell it to everyone)
