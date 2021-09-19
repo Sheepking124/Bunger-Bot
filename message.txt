@@ -1,11 +1,16 @@
 from math import trunc
 import re
+from typing import ItemsView
 import discord
 import random
 from discord import message
+from discord.embeds import Embed
 from discord.ext import commands
 import json
 import os
+from discord.ext.commands import has_permissions
+from discord.ext.commands import MissingPermissions
+from discord.ext.commands import MissingRequiredArgument
 
 #from requests.api import delete
 
@@ -50,9 +55,9 @@ def is_number(s):
         pass
 
 
+#1. Name (String)\n2. Description (String)\n3. Sellable (True/False)\n4. SellPrice (Number)\n5. Useable (True/False)\n6. BuyPrice (Number)
 
-
-#Name, Description, sellable, Sellprice, Useable
+#Name, Description, sellable, Sellprice, Useable, Buyprice
 fishitems = [
  [":fish: Trout", "A basic trout", True, 75, False],
  [":fish: Cod", "A Basic Cod", True, 70, False],
@@ -84,6 +89,7 @@ print(getprefix)
 Bot = commands.Bot(case_insensitive=True, command_prefix=getprefix)
 Bot.remove_command("help")
 
+#Help command
 @Bot.group(invoke_without_command=True)
 async def help(ctx):
     
@@ -167,6 +173,7 @@ async def getuser(ctx):
 
 # Purge Command
 @Bot.command()
+@has_permissions(administrator=True)
 async def purge(ctx, amount=0):
     if amount == None or amount == 0:  # and :
         await ctx.send("Amount not recognized, please put a valid number.")
@@ -356,7 +363,7 @@ async def makeinv(ctx):
 
     else:
           inven[str(ctx.author.id)] = {}
-          inven[str(ctx.author.id)]["Inv"] = [] 
+          inven[str(ctx.author.id)] = {}
           with open("InvData.json", "w") as f:
              json.dump(inven, f)
 
@@ -371,6 +378,7 @@ async def sell(ctx, *, item):
     FoundItem = False
     FoundNum = None
     Sellingitem = None
+    Sellable = None
     Num = 0
 
     isnum = is_number(item)
@@ -382,22 +390,48 @@ async def sell(ctx, *, item):
 
     for x in inven[str(ctx.author.id)]["Inv"]:
         print(isnum)
-        if isnum == None and x[0].lower().find(item.lower()) != -1 and x[2] == True:
-            FoundItem = True
-            FoundNum = Num
-            Sellingitem = inven[str(ctx.author.id)]["Inv"][FoundNum]
+        if isnum == None and x[0].lower().find(item.lower()) != -1:
+
+            #changes "Sebllable" variable to false if it is false
+            if x[2] == False:
+                Sellable = False
+            
+            #Runs if can be sold
+            if x[2] == True:
+                Sellable = True
+                FoundItem = True
+                FoundNum = Num
+                Sellingitem = inven[str(ctx.author.id)]["Inv"][FoundNum]
             break
-        elif isnum == True and inven[str(ctx.author.id)]["Inv"][round(item - 1)] != None and inven[str(ctx.author.id)]["Inv"][round(item - 1)][2] == True:
-            print("yeah yeah")
-            FoundItem = True
-            FoundNum = item - 1
-            Sellingitem = inven[str(ctx.author.id)]["Inv"][round(item - 1)]
+
+        elif isnum == True and inven[str(ctx.author.id)]["Inv"][round(item - 1)] != None:
+            
+            print(inven[str(ctx.author.id)]["Inv"][round(item - 1)][2], "is thee thing")
+            #Changes sellable to "False" but still processes
+            if inven[str(ctx.author.id)]["Inv"][round(item - 1)][2] == False:
+                Sellable = False
+            
+            #Runs if can be sold
+            if inven[str(ctx.author.id)]["Inv"][round(item - 1)][2] == True:
+                Sellable = True
+                FoundItem = True
+                FoundNum = item - 1
+                Sellingitem = inven[str(ctx.author.id)]["Inv"][round(item - 1)]
             break
 
         Num = Num + 1
 
-    if FoundItem == False:
-        msg = await ctx.send(f"{ctx.author.mention}, Item either `not found`, or `unsellable`")
+    #If the item is false/unsellable
+    print(Sellingitem, "Is the selling item")
+    if FoundItem == False and Sellable == None:
+        msg = await ctx.send(f"{ctx.author.mention}, Item `not found`")
+        await msg.add_reaction("❌")
+        msgreaction = "❌"
+        sender = ctx.author
+        delmessages.append([msg, msgreaction, sender])
+
+    elif Sellable == False:
+        msg = await ctx.send(f"{ctx.author.mention}, Item `Unsellable`")
         await msg.add_reaction("❌")
         msgreaction = "❌"
         sender = ctx.author
@@ -427,10 +461,13 @@ async def sell(ctx, *, item):
             Sconfmessages.append([msg, confreact, decreact , sender, name, price, FoundNum, Sellingitem])
         else:
             await ctx.send("Item not sellable")
+#msg, confreact, decreact , sender, name, price, FoundNum, BuyingItem, guild, othername
 
 #Reactions Handler       
 @Bot.event
 async def on_reaction_add(reaction, user):
+
+    #Deletes certain messages
     num = 0
     for x in delmessages:
         if x[0] == reaction.message and x[2] == user and str(reaction) == x[1]:
@@ -466,42 +503,78 @@ async def on_reaction_add(reaction, user):
           elif x[0] == reaction.message and x[3] == user and str(reaction) == x[2]:
              Sconfmessages.remove(Sconfmessages[num])
              await reaction.message.edit(content="Sell Action Canceled")
-        
+    
+    num = 0
     for x in Bconfmessages:
+        #Gets all the values -- ctx, Message, ConfirmReaction, DeclineReation, Price, Name, BuyThing
+        ctx = x[0]
+        msg = x[1]
+        ConfReact = x[2]
+        DecReact = x[3]
+        Price = x[4]
+        Name = x[5]
+        Buything = x[6]
+        #got all the values
+
         shops = await getshops()
-        guild = x[8]
+        users = await getusers()
+        inven = await getinven()
 
-        if x[3] == user and x[9] in shops[str(guild.id)]:
-          Buything = x[7]
-
-          users = await getusers()
-          if x[0] == reaction.message and str(reaction) == x[1] and Buything != None and Buything[0] == x[4] and users[str(user.id)]["wallet"] >= x[5]:
-             users = await getusers()
-
-             users[str(user.id)]["wallet"] -= Buything[3]
-             with open("Data.json", "w") as f:
-                 json.dump(users, f)
+        if reaction.message == msg and ctx.author == user and Name in shops[str(ctx.guild.id)]:
             
-             inven = await getinven()
+            if str(reaction) == ConfReact and users[str(ctx.author.id)]["wallet"] >= Price:
+                print("yeah")
 
-             Inv = inven[str(user.id)]["Inv"]
-             Inv.append(Buything)
-             with open("InvData.json", "w") as f:
-                  json.dump(inven, f)
-            
-             users = await getusers()
-             bal = users[str(user.id)]["wallet"]
-             await reaction.message.edit(content=f'{user.mention}\nSuccesfully bought "{x[4]}" for :hamburger:{x[5]} Bungers!\nNew Wallet Balance: :hamburger:{bal} Bungers!')
-             Bconfmessages.remove(Bconfmessages[num])
-            
-          elif users[str(user.id)]["wallet"] < x[5]:
-              await reaction.message.edit(content=f"{user.mention}, Not enough :hamburger:`Bungers` to purchase this item\nhaha broke lol")
+                #Removes money
+                users[str(ctx.author.id)]["wallet"] -= Price
+                
+                #Dumps data
+                with open("Data.json", "w") as f:
+                    json.dump(users, f)
+                
+                #adds it to the inventory and dumps data
+                print(inven[str(ctx.author.id)])
+                
+                #gets table of inv keys
+                invkeys = []
+                for x in inven[str(ctx.author.id)].keys():
+                    invkeys.append(x.lower())
+                
+                #if its not found, it adds it, otherwise it makes a new one with a number at the end
+                if inven[str(ctx.author.id)].get(Buything[0].lower()) == None:
+                    inven[str(ctx.author.id)][Buything[0].lower()] = Buything
 
-          elif x[0] == reaction.message and x[3] == user and str(reaction) == x[2]:
-             Bconfmessages.remove(Bconfmessages[num])
-             await reaction.message.edit(content="Sell Action Canceled")
+                #adds number and adds it to prevent overwriting
+                elif inven[str(ctx.author.id)].get(Buything[0].lower()) != None:
+                    fnum = 1
+                    while inven[str(ctx.author.id)].get( str(Buything[0].lower()) + str(fnum) ) != None:
+                        fnum = fnum + 1
+                    
+                    #Makes the new name and adds it
+                    NewName = str(Buything[0].lower()) + str(fnum)
+                    inven[str(ctx.author.id)][NewName] = Buything
+
+                #dumps data
+                with open("InvData.json", "w") as f:
+                    json.dump(inven, f)
+
+                #Gets balance and sends success message
+                bal = users[str(user.id)]["wallet"]
+                await reaction.message.edit(content=f'{user.mention}\nSuccesfully bought "{Name}" for :hamburger:{Price} Bungers!\nNew Wallet Balance: :hamburger:{bal} Bungers!')
+                Bconfmessages.remove(Bconfmessages[num])
+
+            #Not enough money message
+            elif users[str(user.id)]["wallet"] < Price:
+                await reaction.message.edit(content=f"{user.mention}, Not enough :hamburger:`Bungers` to purchase this item\nhaha broke lol")
+
+            #Cancel message
+            elif msg == reaction.message and ctx.author == user and str(reaction) == DecReact:
+                Bconfmessages.remove(Bconfmessages[num])
+                await reaction.message.edit(content="Sell Action Canceled")
 
     num = num + 1
+
+
 
 #Check Shop command
 @Bot.command()
@@ -516,10 +589,15 @@ async def shop(ctx):
     num = 0
     for x in shops[str(ctx.guild.id)]:
         emb.add_field(name=f"[{num + 1}] {shops[str(ctx.guild.id)][x][0]}", value = shops[str(ctx.guild.id)][x][1], inline=False)
-        num =+ 1
+        num = num + 1
 
     await ctx.send(embed=emb)
-        
+
+async def addmessagemdeletebutton(ctx, msg):
+    #adds reactiong
+    await msg.add_reaction("❌")
+    delmessages.append([msg, "❌", ctx.author])
+
 #Buy Command
 @Bot.command()
 @commands.cooldown(1, 3, commands.BucketType.user)
@@ -529,71 +607,237 @@ async def Buy(ctx, *, item):
     await makeinv(ctx)
     await makeacc(ctx)
     shops = await getshops()
+    users = await getusers()
 
-    FoundItem = False
-    BuyingItem = None
-    Num = 0
+    #formats all items into a table
+    values = []
+    for x in shops[str(ctx.guild.id)].keys():
+        values.append(x)
 
-    isnum = is_number(item)
+    print(is_number(item))
+    print(item)
+    print(shops[str(ctx.guild.id)][values[int(item) - 1]])
+    print(values[int(item)-1])
 
-    if isnum == True:
-        item = round(float(item))
+    #if the item is in the shop
+    if item in shops[str(ctx.guild.id)]:
+        
+        #gets variables
+        Name = shops[str(ctx.guild.id)][item][0]
+        Price = shops[str(ctx.guild.id)][item][5]
+        #got variables
 
-    for x in shops[str(ctx.guild.id)]:
-        print(shops[str(ctx.guild.id)][x])
-        if isnum == None and shops[str(ctx.guild.id)][x][0].lower().find(item.lower()) != -1:
-            FoundItem = True
-            FoundNum = Num
-            BuyingItem = shops[str(ctx.guild.id)][x]
-            break
-        elif isnum == True and shops[str(ctx.guild.id)][x][round(item - 1)] != None:
-            print("yeah yeah")
-            FoundItem = True
-            FoundNum = item - 1
-            BuyingItem = shops[str(ctx.guild.id)][x]
-            break
-
-        Num = Num + 1
-
-    if FoundItem == False:
-        msg = await ctx.send("Item not found")
+        msg = await ctx.send(f'{ctx.author.mention}, Are you sure you want to buy "{Name}" for :hamburger:{Price} Bungers?')
+        await msg.add_reaction("✔️")
         await msg.add_reaction("❌")
-        msgreaction = "❌"
-        sender = ctx.author
-        delmessages.append([msg, msgreaction, sender])
 
-    else: 
-        if shops[str(ctx.guild.id)][x][2] != None:
-            
+        Bconfmessages.append([ctx, msg, "✔️", "❌", Price, Name, shops[str(ctx.guild.id)][item]])
 
+    #Does this if number
+    elif is_number(item) == True and values[int(item) - 1] != None:
+        print("tis")
+        #gets item 
+        item = shops[str(ctx.guild.id)][values[int(item) - 1]]
 
-            users = await getusers()
-            name = shops[str(ctx.guild.id)][x][0]
-            price = shops[str(ctx.guild.id)][x][5]
+        #gets variables
+        Name = item[0]
+        Price = item[5]
+        #got variables
 
-            
+        msg = await ctx.send(f'{ctx.author.mention}, Are you sure you want to buy "{Name}" for :hamburger:{Price} Bungers?')
+        await msg.add_reaction("✔️")
+        await msg.add_reaction("❌")
 
-            newbal = users[str(ctx.author.id)]["wallet"]
-            msg = await ctx.send(f'{ctx.author.mention}, Are you sure you want to buy "{name}" for :hamburger:{price} Bungers?')
-            #msg = await ctx.send(f"Succesfully sold {name} for :hamburger:{price} Bungers!\nNew Wallet Balance: :Hamburger:***{newbal}*** Bungers")
-            await msg.add_reaction("✔️")
-            await msg.add_reaction("❌")
+        Bconfmessages.append([ctx, msg, "✔️", "❌", Price, Name, item])
+        
+    elif is_number(item) == False and item not in shops[str(ctx.guild.id)]:
+        #sends message with a delete button
+        delmes = await ctx.send("Item not found")
+        await addmessagemdeletebutton(ctx, delmes)
 
-            decreact = "❌"
-            confreact = "✔️"
-            sender = ctx.author
-            guild = ctx.guild
-            othername = str(x)
-            Bconfmessages.append([msg, confreact, decreact , sender, name, price, FoundNum, BuyingItem, guild, othername])
-        else:
-            await ctx.send("Item not sellable")
 
 #Itemsetup Command
 @Bot.command()
-async def ItemSetup(ctx):
-    await ctx.send('To set up an item, type in `"B#Additem {Name}, {Description}, idk"` (If they are more than 1 words long use quotes, ***EX***: **Quotes arent needed for FishingRod, but they are for "Fishing Rod"**)')
+@has_permissions(administrator=True)
+async def ItemSetup(ctx, Name, Desc, Sellable, SellPrice, Useable, BuyPrice):
+    print("got this far")
+    await makeshop(ctx)
+    print("got this far")
+    shops = await getshops()
+    print("got this far")
+
+    if type(Name) == str and type(Desc) == str and type(Sellable) == bool or Sellable == "True" or Sellable == "true" or Sellable == "False" or Sellable == "false" and type(SellPrice) == int and type(Useable) == bool or Useable == "True" or Useable == "true" or Useable == "False" or Sellable == "false" and type(BuyPrice) == int:
+
+        #Changes Sellable to true/false if it was originally a string
+        if Sellable == "True" or Sellable == "true":
+            Sellable = True 
+        elif Sellable == "False" or Sellable == "false":
+            Sellable = False
+        
+        #Changes Useable to true/false if it was originally a string
+        if Useable == "True" or Useable == "true":
+            Useable = True    
+        elif Useable == "False" or Useable == "false":
+            Useable = False
+
+        if Name in shops[str(ctx.guild.id)]:
+            em = discord.Embed(title="Item Error", color=discord.Color.dark_red())
+            em.add_field(name="Item already exists", value=f'The item {Name} already exists lol', inline=False)
+            await ctx.send(embed=em)
+        else:
+            NewItem = [str(Name), str(Desc), Sellable, int(SellPrice), Useable, int(BuyPrice)]
+            shops[str(ctx.guild.id)][Name] = NewItem
+
+        await ctx.send("Added loool")
+
+        with open("Shopdata.json", "w") as f:
+            json.dump(shops, f)
+
+DiffVars = {
+    "name" : "String", #0
+    "desc" : "String", #1
+    "description" : "String", #1
+    "sellable" : "Bool", #2
+    "sellprice" : "Number", #3
+    "useable" : "Bool", #4
+    "buyprice" : "Number" #5
+}
+
+VarNums = {
+    "name" : 0, #0
+    "desc" : 1, #1
+    "description" : 1, #1
+    "sellable" : 2, #2
+    "sellprice" : 3, #3
+    "useable" : 4, #4
+    "buyprice" : 5 #5
+}
+
+#Detects flaws and stuf
+def GetNewSettingError(givensetting, Word):
+
+    print(givensetting)
+    #Both sides of bool
+    if givensetting == "Bool" and Word.lower() not in {"false":False, "true":True}:
+        return "BoolNameError"
+    elif givensetting == "Bool" and Word.lower() in {"false":False, "true":True}:
+        return ["Bool", bool(Word)]
+                        
+    #Both sides of number
+    if givensetting == "Number" and Word.isdigit() == True:
+        return ["Number", int(Word)]
+    elif givensetting == "Number" and Word.isdigit() != True:
+        return "NumberNameError"
+
+    #Both sides of string
+    if givensetting == "String" and isinstance(Word, str) == True:
+        return ["String", Word]
+    elif givensetting == "String" and isinstance(Word, str) != True:
+        return "StringNameError"
 
 
+#Itemconfig
+@Bot.command()
+@has_permissions(administrator=True)
+async def ItemConfig(ctx, Name, Setting, Newsetting):
+    #makes shop if it isnt there, and gets shops
+    await makeshop(ctx)
+    shops = await getshops()
+
+    
+    
+    #If the name is found it will continue
+    if shops[str(ctx.guild.id)].get(Name) != None:
+
+        #Makes sure the setting is an actual changeable setting
+        if Setting.lower() in DiffVars:
+
+            #gets the setting in the table
+            givensetting = DiffVars[Setting.lower()]
+
+            #Does this if nothing is wrong
+            if GetNewSettingError(givensetting, Newsetting) != "StringNameError" and GetNewSettingError(givensetting, Newsetting) != "NumberNameError" and GetNewSettingError(givensetting, Newsetting) != "BoolNameError":
+                Newsetting = GetNewSettingError(givensetting, Newsetting)[1]
+                #Changes and writes it in
+                shops[str(ctx.guild.id)].get(Name)[VarNums[Setting.lower()]] = Newsetting
+
+                with open("Shopdata.json", "w") as f:
+                    json.dump(shops, f)
+
+                await ctx.send(f"{ctx.author.mention}, successfully changed `{Name}'s` property of `{Setting}` into `{Newsetting}`!")
+
+            
+            #Sends the String error message
+            elif GetNewSettingError(givensetting, Newsetting) == "StringNameError":
+                em = discord.Embed(title="NewSetting Error", color=discord.Color.dark_red())
+                em.add_field(name="String error", value=f'A string value is legit just words, so if you want to change a `description` for example, you could put a single word such as `Pan` but if it is more than just one word you must use parenthesis `"this is a pan"`', inline=False)
+                await ctx.send(embed=em)
+            
+            #Sends the Number error message
+            elif GetNewSettingError(givensetting, Newsetting) == "NumberNameError":
+                em = discord.Embed(title="NewSetting Error", color=discord.Color.dark_red())
+                em.add_field(name="Number error", value=f'A Number value is a number, so if you want to change a `BuyPrice` for example, you could put `any number`, such as `"850"` This goes with every number', inline=False)
+                await ctx.send(embed=em)
+            
+            #Sends the Bool error message
+            elif GetNewSettingError(givensetting, Newsetting) == "BoolNameError":
+                em = discord.Embed(title="NewSetting Error", color=discord.Color.dark_red())
+                em.add_field(name="Boolean error", value=f'A Boolean is a `True/False` statement so if you want to change the `Useable` property on an item for example, you could put any Bool, such as `"True"` or `"False"`', inline=False)
+                await ctx.send(embed=em)
+
+            
+        #If Setting not found it sends error message
+        else:
+            #Makes error embed and sends it
+            em = discord.Embed(title="NewSetting Error", color=discord.Color.dark_red())
+            em.add_field(name="Setting not found", value=f"Setting of **'{str(Setting)}'** was not found \n`below is a list of settings you can change tho lol`", inline=False)
+            em.add_field(name="Setting List", value=" `Name` *(String)*\n `Description` *(String)*\n `Sellable` *(True/False)*\n `SellPrice` *(Number)*\n `Useable` *(True/False)*\n `BuyPrice` *(Number)*", inline=False)
+            await ctx.send(embed=em)
+
+    #If name not found it sends error message
+    else:
+        #Makes error embed and sends it
+        em = discord.Embed(title="", color=discord.Color.dark_red())
+        em.add_field(name="Item not found", value="`Must be exact name with correct capitilazation`", inline=False)
+        await ctx.send(embed=em)
+
+#itemsetup missing permisions error
+@ItemSetup.error
+async def item_setup_error(ctx, error):
+    if isinstance(error, MissingPermissions):
+        await ctx.send("You don't have permission to make new items\nLOOK AT THIS IDIOT HE THOUGHT HE COULD MAKE ITEMS\nHAHHAHAHA WHAT AN IDIOT")
+
+#Itemsetup help missing argument error
+@ItemSetup.error
+async def item_setup_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        print("yeees")
+        #Makes error embed
+        em = discord.Embed(title="ItemSetup Help", color=0x2754a7)
+        em.add_field(name="Variable List", value="**1.** `Name` *(String)*\n**2.** `Description` *(String)*\n**3.** `Sellable` *(True/False)*\n**4.** `SellPrice` *(Number)*\n**5.** `Useable` *(True/False)*\n**6.** `BuyPrice` *(Number)*", inline=True)
+        em.add_field(name="How to adjust settings", value="You can use B#ItemConfig to change an items values\n***Ex:*** `B#ItemConfig <Name> <Setting> <NewSetting>`", inline=True)
+        em.add_field(name="Example:", value='*B#Itemsetup "Void Token" "A neat token from the void, cool!" true 220 false 165*\n`Note: You must use "" for things you want to be longer than one word, as seen in example` ', inline=False)
+      
+        #sends error embed
+        await ctx.send(embed=em)
+
+#Itemconfig help setup error
+@ItemConfig.error
+async def item_config_error(ctx, error):
+    if isinstance(error, commands.MissingRequiredArgument):
+        
+        em = discord.Embed(title="ItemConfig Help", color=0x2754a7)
+        em.add_field(name="Variable List", value=" `Name` *(String)*\n `Description` *(String)*\n `Sellable` *(True/False)*\n `SellPrice` *(Number)*\n `Useable` *(True/False)*\n `BuyPrice` *(Number)*", inline=True)
+        em.add_field(name="How to adjust settings", value="You can use B#ItemConfig to change an items values\n***Ex:*** `B#ItemConfig <Name> <Setting> <NewSetting>`", inline=True)
+        em.add_field(name="Example:", value='*B#ItemConfig "Void Token" BuyPrice 899*\n`Note: You must use "" for things you want to be longer than one word, as seen in example` ', inline=False)
+       
+        await ctx.send(embed=em)       
+        
+#itemconfig missing permisions error
+@ItemConfig.error
+async def item_config_error(ctx, error):
+    if isinstance(error, MissingPermissions):
+        await ctx.send("You don't have permission to adjust items\nLOOK AT THIS IDIOT HE THOUGHT HE COULD MAKE ITEMS\nHAHHAHAHA WHAT AN IDIOT")         
 
 #Makes bank account
 async def makeacc(ctx):
@@ -637,7 +881,7 @@ async def makeshop(ctx):
 
     else:
         shops[str(ctx.guild.id)] = {}
-        shops[str(ctx.guild.id)]["Fishing Rod"] = ["Fishing Rod", ":fishing_pole_and_fish: Used to fish! Grants access to the 'B#fish' command!", False, 0, False]
+        shops[str(ctx.guild.id)]["Fishing Rod"] = ["Fishing Rod", ":fishing_pole_and_fish: Used to fish! Grants access to the 'B#fish' command!", False, 0, False, 250]
         #items = shops[str(ctx.guild.id)]["Items"]
         #items.append(["Fishing Rod", "Used to fish! Grants access to the 'B#fish' command!", False, 0, False])
 
@@ -645,4 +889,4 @@ async def makeshop(ctx):
             json.dump(shops, f)
 
 # KEEP THIS SECRET (hes joking tell it to everyone)
-Bot.run('TOKEN')
+Bot.run('Token')
