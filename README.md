@@ -14,36 +14,36 @@ So far there are a total of 25 commands, mixed with setup, secret commands, and 
 These commands are:
 
 <---Secret/Utility--->
--B#prefixcheck
--B#ping
--B#purge
--B#say
+B#prefixcheck,
+B#ping,
+B#purge,
+B#say,
 
 <---User Commands--->
--B#work
--B#deposit ("dep" in the source code)
--B#withdraw
--B#balance ("bal" in the source code)
--B#fish
--B#inv
--B#sell
--B#shop
--B#Buy
--B#use
--B#TradeIn
+B#work,
+B#deposit ("dep" in the source code),
+B#withdraw,
+B#balance ("bal" in the source code),
+B#fish,
+B#inv,
+B#sell,
+B#shop,
+B#Buy,
+B#use,
+B#TradeIn,
 
 <---Setup commands--->
 
--B#ItemSetup
--B#ItemConfig
--B#ItemModifier
--B#editlist
--B#SetFishingChannel
--B#TradeInChannel
--B#NewShop
--B#ChannelShop
--B#ChannelShopBuy
+B#ItemSetup,
+B#ItemConfig,
+B#ItemModifier,
+B#editlist,
+B#SetFishingChannel,
+B#TradeInChannel,
+B#NewShop,
+B#ChannelShop,
+B#ChannelShopBuy,
 
 
-That's all for now
+That's all for now;
 More being added
